@@ -7,7 +7,7 @@
 // Judging those spans as commands fires the gate on reads (heredoc briefs
 // fired a config gate on filenames mentioned in their bodies; a deployment
 // listing plus quoted "deploy" prose claimed a deploy). The same shape a
-// branch guard already strips before judging.
+// command gate strips before judging.
 
 // Drop heredoc bodies: from a line carrying `<<TAG` (also `<<-TAG`, quoted
 // tags) through the terminating line `TAG`. Head lines are kept verbatim so
@@ -51,7 +51,7 @@ const QUOTE_OPEN_PRECEDER = /[=\s([{;&|<>$`'"]/;
 // Split a command into segments the way the guards judge them: one segment,
 // one verdict, so a read in one segment neither fires for nor hides behind
 // another. Quote-aware: separators inside a quoted span (`VAR='a && b'`, a
-// `kitty send-text "…; …"` message) do not split, and a multiline quoted span
+// `send-text "…; …"` message) do not split, and a multiline quoted span
 // stays one segment. An unbalanced quote is treated as a literal, so it can
 // never swallow the rest of the command.
 export const splitSegments = (command) => splitSegmentsDetailed(command).map((s) => s.text);

@@ -22,7 +22,7 @@ test("a whole-line block masks its markers and body, and nothing outside", () =>
 test("a row that quotes both markers keeps later rows inside the block", () => {
   const lines = [
     "<!-- AUTO-GEN:start scripts-table -->",
-    "| `generate-docs.mjs` | node | Looks for <!-- AUTO-GEN:start <name> --> ... <!-- AUTO-GEN:end <name> --> blocks |",
+    "| `doc-gen.mjs` | node | Looks for <!-- AUTO-GEN:start <name> --> ... <!-- AUTO-GEN:end <name> --> blocks |",
     "| later row |",
     "<!-- AUTO-GEN:end scripts-table -->",
     "hand-written",
@@ -55,12 +55,12 @@ test("a stray end marker with no open block is ordinary text", () => {
 });
 
 test("checkQuerySegments passes an all-local pipeline", () => {
-  assert.deepEqual(checkQuerySegments(`jq '.mcpServers|length' mcp-servers.json | wc -l`), { ok: true });
+  assert.deepEqual(checkQuerySegments(`jq '.servers|length' servers.json | wc -l`), { ok: true });
   assert.deepEqual(checkQuerySegments(`grep -c x a.md && cat b.md; git ls-files '*.md' | wc -l`), { ok: true });
 });
 
 test("checkQuerySegments refuses a non-local command after a pipe, where checkLocal does not", () => {
-  const run = `jq ".mcpServers|length" mcp-servers.json | gh api repos/x`;
+  const run = `jq ".servers|length" servers.json | gh api repos/x`;
   assert.equal(checkLocal(run, "/").ok, true, "the first-word gate passes it");
   assert.deepEqual(checkQuerySegments(run), { ok: false, reason: "command not allowed: gh", word: "gh" });
 });

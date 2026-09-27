@@ -37,7 +37,7 @@ A local fix makes the copy differ from the release, and the copy-identity check 
 - Run the repo's lint, format and unused-code checks.
 
 ## 6. CI
-- The workflow needs no secrets. Its runner is the `GUARD_RUNNER_LABELS` repository variable, default hosted `ubuntu-slim`; a repo that cannot use hosted runners sets it to its self-hosted labels (never on a public repo).
+- The workflow needs no secrets. Its runner is the `GUARD_RUNNER_LABELS` repository variable, default `ubuntu-slim` (GitHub's hosted single-CPU runner, enough for this job); a repo that cannot use hosted runners sets it to its self-hosted labels (never on a public repo).
 - A private repo in a free org stays advisory (no rulesets). On a paid repo the check can be made required.
 - A job lasting about 2 s with no steps is a runner billing block, not code. Read the job annotation.
 

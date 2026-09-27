@@ -41,7 +41,7 @@
 //   - never the first token of a line (after any list or quote marker). A line
 //     that opens with `<!--` starts a CommonMark HTML block, and the rest of
 //     the line then renders with no markdown (MALFORMED);
-//   - never after a `<!-- proof: … -->` on the same line. proof-sweep reads
+//   - never after a `<!-- proof: … -->` on the same line. A proof-annotation reader takes
 //     to the last `-->`, so the proof would parse as bad JSON (MALFORMED);
 //   - never inside an AUTO-GEN block, whose lines a generator owns
 //     (MISPLACED);
@@ -51,10 +51,10 @@
 // Usage:
 //   node scripts/live-values.mjs --check [--format=json]   read-only verdict
 //   node scripts/live-values.mjs --write                   rewrite drifted spans
-//   node scripts/live-values.mjs --hook                    pre-commit: --write + git add (lefthook.yml)
+//   node scripts/live-values.mjs --hook                    pre-commit: --write + git add (any pre-commit hook runner)
 //   node scripts/live-values.mjs --list                    registry names, uses
 //   node scripts/live-values.mjs --snapshot                measure snapshot queries (timer)
-//   node scripts/live-values.mjs --store-health            is the store kept? (hook, loka)
+//   node scripts/live-values.mjs --store-health            is the store kept? (session-start or close-out checks)
 //   node scripts/live-values.mjs --help                    this text; writes nothing
 //
 // Exit, highest first: 2 usage (bad argument or bad registry entry), 3 could
@@ -84,7 +84,7 @@ const SNAP_SPAN_RE = /^(.*) \(measured (\d{4}-\d{2}-\d{2})\)$/su;
 const dated = (value, iso) => `${value} (measured ${iso.slice(0, 10)})`;
 const DAY_MS = 86400000;
 
-// Pure text tools on top of proof-sweep's local lane. Nothing here reaches the
+// Pure text tools on top of the proof reader's local lane. Nothing here reaches the
 // network or an account.
 export const FILE_TOOLS = new Set([
   ...LOCAL_TOOLS,
@@ -404,7 +404,7 @@ export const writeDrift = (result) => {
 // `--hook` = `--write`, then `git add` of exactly the files it rewrote. Before
 // writing, it refuses any file it would rewrite that has unstaged changes,
 // because `git add` would sweep someone else's half-done edit into this
-// commit. lefthook's `stage_fixed` cannot do this job: it re-adds only files
+// commit. A hook runner's generic "stage fixed files" option cannot do this job: it re-adds only files
 // that were already staged, and here the doc changes because its SOURCE
 // changed (a new workflow file), so the doc was never staged.
 //
@@ -436,8 +436,9 @@ export const runHook = (result, root) => {
 
 // ---- store health -------------------------------------------------------------
 
-// Is automatic snapshot refresh enabled? The default probe asks the user's
-// scheduler; pass timerEnabled to check any other arrangement. The engine
+// Is automatic snapshot refresh enabled? The default probe asks systemd for a
+// per-user timer named live-snapshots.timer; pass timerEnabled to check any
+// other arrangement. The engine
 // keeps the logic (one problem line per defect, [] when healthy or when the
 // registry has no kind:snapshot entry) and leaves the scheduling to the
 // adopter: cron, a scheduler, or a user timer that runs `--snapshot` daily.
@@ -453,7 +454,7 @@ const userTimerEnabled = () => {
 // Is the snapshot store being kept? One problem line per defect, [] when
 // healthy or when the registry has no kind:snapshot entry (nothing to keep).
 // The ONE implementation behind both surfaces: the SessionStart hook
-// (maintenance-status-check.sh, via --store-health) and loka-sweep.mjs.
+// (a session-start check, via --store-health) and a close-out sweep.
 export const storeHealth = ({ root, now = Date.now(), timerEnabled = userTimerEnabled }) => {
   const regPath = join(root, REGISTRY_FILE);
   if (!existsSync(regPath)) return [];
