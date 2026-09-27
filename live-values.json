@@ -1,0 +1,12 @@
+{
+  "engine-lines": {
+    "run": "cat engine/live-values.mjs engine/lib/*.mjs | wc -l",
+    "kind": "file",
+    "format": "int"
+  },
+  "test-files": {
+    "run": "find tests -name '*.test.mjs' | wc -l",
+    "kind": "file",
+    "format": "int"
+  }
+}
