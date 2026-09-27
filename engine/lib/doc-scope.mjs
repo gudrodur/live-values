@@ -8,7 +8,7 @@
 //   collectFiles(root)             the prose in scope (INDEX.md never is)
 //   liveScope(root)                collectFiles plus any repo's agent-facing docs
 //   autogenMask(lines)             true for each line inside an AUTO-GEN block
-//   checkLocal(run, root)          proof-sweep's --local gate (first word only)
+//   checkLocal(run, root)          the proof reader's --local gate (first word only)
 //   checkQuerySegments(run, tools) every command in a pipeline/list allowlisted
 //   runCommand(run, opts)          bash -c in root, with a timeout
 //
@@ -51,13 +51,15 @@ export const liveScope = (root) => {
   return out.sort();
 };
 
-// proof-sweep's --local lane: tools that need no network, auth or machine path.
+// The local lane of a proof-annotation reader: tools that need no network, auth or machine path.
 export const LOCAL_TOOLS = new Set(["ls", "test", "grep", "node", "jq", "git", "cat", "wc"]);
 
 // Files in scope: the always-read entry docs plus the docs directory and
 // skills that carry factual claims. INDEX.md is generated, so it is never in
 // scope. AGENTS.md and CLAUDE.md are both listed; a repo keeps whichever
-// entry doc it uses (the other name simply matches nothing).
+// entry doc it uses (the other name simply matches nothing). The four
+// *-ORGANIZATION.md names come from the setup this engine was extracted from;
+// a repo without them loses nothing.
 export const collectFiles = (root) => {
   const files = [];
   for (const name of ["AGENTS.md", "CLAUDE.md", "MCP-ORGANIZATION.md", "HOOKS-ORGANIZATION.md", "SKILLS-ORGANIZATION.md", "SCRIPTS-ORGANIZATION.md"]) {
@@ -113,7 +115,7 @@ export const autogenMask = (lines) => {
 
 const expandPath = (tok) => (tok.startsWith("~") ? join(homedir(), tok.slice(1)) : tok);
 
-// proof-sweep's `--local` gate: first word must be allowlisted and every
+// The proof-annotation reader's `--local` gate: first word must be allowlisted and every
 // path-like argument must exist. Relative path-likes resolve against the repo
 // root, which is also the commands' cwd. It reads the FIRST word only, so a
 // later pipeline segment is not gated; checkQuerySegments is the strict form.

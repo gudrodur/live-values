@@ -13,9 +13,9 @@ drifted spans; `--hook` rewrites and stages the files for pre-commit.
 
 ## This repo checks itself
 
-The engine is <!-- live:engine-lines -->1200<!-- /live --> lines in `engine/`,
+The engine is <!-- live:engine-lines -->1203<!-- /live --> lines in `engine/`,
 covered by <!-- live:test-files -->5<!-- /live --> test files under `tests/`.
-CI runs `node dist/live-values.mjs --check` over this README on every push.
+CI runs `node dist/live-values.mjs --check` over this repo's docs on every push.
 
 ## Adopting
 
@@ -31,7 +31,7 @@ CI runs `node dist/live-values.mjs --check` over this README on every push.
 
 The full procedure (worktrees, tooling ignores, CI lanes, acceptance) is in
 `adopt/SKILL.md`. The marker grammar is in `docs/grammar.md`, and in the
-engine header (`node scripts/live-values.mjs --help`).
+engine header (`node dist/live-values.mjs --help` here; `node scripts/live-values.mjs --help` in an adopting repo).
 
 ## Configuration
 
