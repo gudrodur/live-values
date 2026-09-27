@@ -1,0 +1,3 @@
+# Machine-local snapshot store (measured by --snapshot, never committed).
+data/live-snapshots.json
+*.live-values.tmp
