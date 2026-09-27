@@ -1,0 +1,59 @@
+# Fails a PR whose commits or description carry an AI authorship marker
+# (a `Co-Authored-By:` trailer naming an AI, or a "Generated with" footer).
+# This is the owner's rule for his repos. Contributions written with an AI are
+# welcome; drop the marker lines and push again.
+#
+# Two checks, because a squash merge copies both into main:
+#   1. every commit message in base..head;
+#   2. the PR description.
+# The body travels through the PR_BODY env var, never interpolated into `run:`.
+# Hosted runner, `pull_request` only, read-only token, no secrets.
+name: ai-authorship-guard
+
+on:
+  pull_request:
+    types: [opened, edited, reopened, synchronize]
+
+permissions:
+  contents: read
+
+jobs:
+  ai-authorship:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444 # v5
+        with:
+          node-version: '24'
+      - name: Block AI authorship markers in commits and the PR description
+        env:
+          BASE: ${{ github.event.pull_request.base.sha }}
+          HEAD: ${{ github.event.pull_request.head.sha }}
+          PR_BODY: ${{ github.event.pull_request.body }}
+        run: |
+          set -euo pipefail
+          git log --format='%H%n%B%n--end--' "$BASE..$HEAD" > "$RUNNER_TEMP/commits.txt"
+          node --input-type=module <<'JS'
+          import fs from 'node:fs';
+          // A trailer or footer at line start, case-insensitive.
+          const MARKER = /^[ \t]*(?:Co-Authored-By:.*(?:Claude|GPT|\bAI\b|Copilot|Anthropic|OpenAI|Gemini)|_?Generated (?:with|by) \[Claude Code\]|🤖 Generated)/im;
+          const find = (t) => {
+            const m = MARKER.exec(t);
+            if (!m) return null;
+            const end = t.indexOf('\n', m.index);
+            return t.slice(m.index, end < 0 ? undefined : end).trim();
+          };
+          let fail = 0;
+          const log = fs.readFileSync(`${process.env.RUNNER_TEMP}/commits.txt`, 'utf8');
+          for (const chunk of log.split('\n--end--\n')) {
+            const [sha, ...msg] = chunk.split('\n');
+            const hit = find(msg.join('\n'));
+            if (hit) { console.log(`::error::AI authorship marker in commit ${sha.slice(0, 12)}: ${hit}`); fail = 1; }
+          }
+          const body = find(process.env.PR_BODY ?? '');
+          if (body) { console.log(`::error::AI authorship marker in the PR description: ${body}`); fail = 1; }
+          if (!fail) console.log('No AI authorship markers in commits or PR description');
+          process.exit(fail);
+          JS
