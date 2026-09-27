@@ -27,8 +27,8 @@ import { envRoot } from "./engine/lib/config-root.mjs";
 
 export const DIST = "dist/live-values.mjs";
 const HEADER = [
-  "// GENERATED from this repo's engine/ by build.mjs.",
-  "// Do not edit: change the source in engine/, rebuild with `node build.mjs`, and copy this file again.",
+  "// GENERATED from https://github.com/gudrodur/live-values (engine/, by build.mjs).",
+  "// Do not edit this copy: change the source there, rebuild with `node build.mjs`, and copy dist/ again.",
   "// Every adopting repo carries it byte-identical at scripts/live-values.mjs;",
   "// a copy-identity check keeps it so. Usage and the marker grammar: node scripts/live-values.mjs --help.",
 ].join("\n");

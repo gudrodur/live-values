@@ -8,6 +8,13 @@
 # here, and fails too: a value nobody could check is not a clean one. The fix
 # is `node scripts/live-values.mjs --write`, which the pre-commit hook runs
 # on a machine with a hook runner installed.
+#
+# The runner comes from the GUARD_RUNNER_LABELS repository variable, so the
+# file stays identical everywhere while each repo picks its lane. Unset, it is
+# the hosted ubuntu-slim runner. A repo that cannot use hosted runners (for
+# example an org with a billing block) sets the variable to its self-hosted
+# labels, e.g. ["self-hosted","ci"]. Never point a public repo at a
+# self-hosted runner: any fork's pull request would run code on it.
 name: live-values
 
 on:
@@ -20,7 +27,7 @@ permissions:
 
 jobs:
   live-values:
-    runs-on: ubuntu-latest
+    runs-on: ${{ fromJSON(vars.GUARD_RUNNER_LABELS || '["ubuntu-slim"]') }}
     steps:
       - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
       # No package-manager cache: the engine needs no dependencies, and a
