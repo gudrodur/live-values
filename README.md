@@ -11,9 +11,22 @@ Renderers show only `six`, because both comments are invisible. The registry
 `--check` fails when a span disagrees with its source; `--write` rewrites the
 drifted spans; `--hook` rewrites and stages the files for pre-commit.
 
+## World-sourced values
+
+A registry entry may carry `"source": "world"` (default `"repo"`, validated
+beside `kind`). Mark an entry world when its value is measured outside this
+repo: other repos, a memory store, an external API. Such a value moves with no
+commit here, so a commit or a PR must not fail on it.
+
+- `--check` and `--hook` print `refresh <name>: doc X, world Y (run --refresh-world)`
+  for a world-sourced drift. It neither fails the run nor rewrites the doc.
+  Repo-sourced drift behaves as before (exit 1; `--hook` rewrites and stages).
+- `--refresh-world` rewrites only world-sourced spans (no `git add`), prints
+  what changed and leaves repo-sourced spans alone. Run it on a timer or by hand.
+
 ## This repo checks itself
 
-The engine is <!-- live:engine-lines -->1203<!-- /live --> lines in `engine/`,
+The engine is <!-- live:engine-lines -->1212<!-- /live --> lines in `engine/`,
 covered by <!-- live:test-files -->5<!-- /live --> test files under `tests/`.
 CI runs `node dist/live-values.mjs --check` over this repo's docs on every push.
 
