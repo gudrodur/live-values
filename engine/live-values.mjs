@@ -52,6 +52,7 @@
 //   node scripts/live-values.mjs --check [--format=json]   read-only verdict
 //   node scripts/live-values.mjs --write                   rewrite drifted spans
 //   node scripts/live-values.mjs --hook                    pre-commit: --write + git add (any pre-commit hook runner)
+//   node scripts/live-values.mjs --refresh-world           rewrite only "source": "world" spans (no git add)
 //   node scripts/live-values.mjs --list                    registry names, uses
 //   node scripts/live-values.mjs --snapshot                measure snapshot queries (timer)
 //   node scripts/live-values.mjs --store-health            is the store kept? (session-start or close-out checks)
@@ -119,9 +120,11 @@ export const validateRegistry = (raw) => {
   for (const [name, e] of Object.entries(data)) {
     if (!NAME_RE.test(name)) problems.push(`${name}: name must match ${NAME_RE}`);
     if (!e || typeof e !== "object") { problems.push(`${name}: entry must be an object`); continue; }
-    const want = e.kind === "snapshot" ? ["format", "kind", "maxAgeDays", "run"] : ["format", "kind", "run"];
+    // `source` is optional: "repo" (default) or "world" (measured outside this repo).
+    const want = (e.kind === "snapshot" ? ["format", "kind", "maxAgeDays", "run"] : ["format", "kind", "run"]).concat("source" in e ? ["source"] : []).sort();
     const keys = Object.keys(e).sort();
     if (keys.join() !== want.join()) problems.push(`${name}: keys must be exactly {${want.join(", ")}}, got {${keys.join(", ")}}`);
+    if ("source" in e && e.source !== "repo" && e.source !== "world") problems.push(`${name}: source must be "repo" or "world"`);
     if (e.kind !== "file" && e.kind !== "snapshot") problems.push(`${name}: kind must be "file" or "snapshot"`);
     if (!FORMATS.has(e.format)) problems.push(`${name}: format must be one of ${[...FORMATS].join(", ")}`);
     if (typeof e.run !== "string" || !e.run.trim()) problems.push(`${name}: run must be a non-empty string`);
@@ -361,6 +364,9 @@ export const evaluate = ({ root, timeoutMs = 10000, now = Date.now() }) => {
     r.expected = shown.value;
     r.result = r.value === shown.value ? "OK" : "DRIFT";
   }
+  // A world-sourced value is measured outside this repo and moves without a
+  // commit here: its drift is a refresh to run, not a failure.
+  for (const r of rows) if (r.result === "DRIFT" && reg.entries[r.name]?.source === "world") r.result = "REFRESH";
   const usedAny = new Set(rows.filter((r) => r.name).map((r) => r.name));
   for (const name of Object.keys(reg.entries)) {
     if (!usedAny.has(name)) rows.push({ file: REGISTRY_FILE, line: 0, name, result: "UNUSED", detail: "registered but no doc shows it; drop it or add a marker" });
@@ -377,9 +383,9 @@ export const evaluate = ({ root, timeoutMs = 10000, now = Date.now() }) => {
 
 // Rewrite every DRIFT span to its value. Atomic per file; only files whose
 // bytes change are touched. Returns the relative paths written.
-export const writeDrift = (result) => {
+export const writeDrift = (result, from = "DRIFT") => {
   const byFile = new Map();
-  for (const r of result.rows) if (r.result === "DRIFT") (byFile.get(r.abs) ?? byFile.set(r.abs, []).get(r.abs)).push(r);
+  for (const r of result.rows) if (r.result === from) (byFile.get(r.abs) ?? byFile.set(r.abs, []).get(r.abs)).push(r);
   const written = [];
   for (const [abs, drifts] of byFile) {
     const lines = result.contents.get(abs).split("\n");
@@ -484,10 +490,11 @@ export const storeHealth = ({ root, now = Date.now(), timerEnabled = userTimerEn
 // ---- CLI --------------------------------------------------------------------------
 
 const USAGE = [
-  "usage: node scripts/live-values.mjs (--check | --write | --hook | --list | --snapshot | --store-health) [--format=json]",
+  "usage: node scripts/live-values.mjs (--check | --write | --hook | --refresh-world | --list | --snapshot | --store-health) [--format=json]",
   "  --check        read-only: does every <!-- live:NAME --> span equal its value?",
   "  --write        rewrite drifted spans from their sources (atomic, per file)",
   "  --hook         pre-commit: --write, then git add the rewritten files; refuses a file with unstaged changes",
+  "  --refresh-world rewrite only the spans of \"source\": \"world\" entries (no git add); --check and --hook print them as refresh lines and do not fail",
   "  --list         registry names with kind, format and where each is shown",
   "  --snapshot     measure every kind:snapshot query into the store file (timer mode)",
   "  --store-health is the store being kept? one [live-values] line per problem, silent when healthy",
@@ -497,7 +504,7 @@ const USAGE = [
   "      --snapshot: 1 when any query failed (old values kept); 2 on a bad registry or store",
   "      --store-health: 1 when it printed a problem",
 ].join("\n");
-const MODES = ["--check", "--write", "--hook", "--list", "--snapshot", "--store-health"];
+const MODES = ["--check", "--write", "--hook", "--list", "--snapshot", "--store-health", "--refresh-world"];
 const KNOWN = new Set([...MODES, "--format=json", "--format=text", "--help", "-h"]);
 
 const main = (argv) => {
@@ -508,7 +515,7 @@ const main = (argv) => {
   const unknown = argv.filter((a) => !KNOWN.has(a));
   const modes = argv.filter((a) => MODES.includes(a));
   if (unknown.length || modes.length !== 1) {
-    console.error(`${unknown.length ? `live-values: unknown argument: ${unknown.join(" ")}` : "live-values: pick exactly one of --check, --write, --hook, --list, --snapshot, --store-health"}\n${USAGE}`);
+    console.error(`${unknown.length ? `live-values: unknown argument: ${unknown.join(" ")}` : "live-values: pick exactly one of --check, --write, --hook, --refresh-world, --list, --snapshot, --store-health"}\n${USAGE}`);
     return 2;
   }
   const mode = modes[0];
@@ -561,6 +568,7 @@ const main = (argv) => {
   let written = [];
   let refused = [];
   if (mode === "--write") written = writeDrift(result);
+  if (mode === "--refresh-world") written = writeDrift(result, "REFRESH");
   if (mode === "--hook") ({ written, refused } = runHook(result, root));
   const rows = result.rows.map(({ abs, start, end, code, ...r }) => r);
   const count = (k) => rows.filter((r) => r.result === k).length;
@@ -568,7 +576,7 @@ const main = (argv) => {
   const code =
     mode === "--hook"
       ? refused.length > 0 || rows.some((r) => BLOCKS_COMMIT.has(r.result)) ? 1 : 0
-      : rows.some((r) => r.result === "QUERY_FAILED") ? 3 : rows.some((r) => !["OK", "WRITTEN"].includes(r.result)) ? 1 : 0;
+      : rows.some((r) => r.result === "QUERY_FAILED") ? 3 : rows.some((r) => !["OK", "WRITTEN", "REFRESH"].includes(r.result)) ? 1 : 0;
   for (const f of refused) {
     console.error(`live-values: refusing to rewrite ${f}: it has unstaged changes that git add would sweep into this commit. Stage or stash them, or run --write and stage by hand.`);
   }
@@ -581,12 +589,13 @@ const main = (argv) => {
   }
   for (const r of rows) {
     if (r.result === "OK") continue;
+    if (r.result === "REFRESH") { console.log(`refresh ${r.name}: doc ${JSON.stringify(r.value)}, world ${JSON.stringify(r.expected)} (run --refresh-world)`); continue; }
     const shown = r.result === "DRIFT" || r.result === "WRITTEN" ? `doc ${JSON.stringify(r.value)} → ${JSON.stringify(r.expected)}` : r.detail;
     console.log(`${r.result.padEnd(12)} ${r.file}:${r.line}  ${r.name ?? ""}  ${shown}`);
   }
   const markers = rows.filter((r) => r.file !== REGISTRY_FILE).length;
   console.log(
-    `live-values: ${markers} marker(s); ${count("OK")} ok, ${count("DRIFT")} drift, ${count("WRITTEN")} written, ` +
+    `live-values: ${markers} marker(s); ${count("OK")} ok, ${count("DRIFT")} drift, ${count("REFRESH")} to refresh, ${count("WRITTEN")} written, ` +
       `${count("UNKNOWN") + count("UNUSED")} unknown/unused, ${count("STALE")} stale, ` +
       `${count("MALFORMED") + count("MISPLACED")} malformed/misplaced, ${count("QUERY_FAILED")} could not check`,
   );

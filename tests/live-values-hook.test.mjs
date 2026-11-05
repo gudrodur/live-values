@@ -90,3 +90,11 @@ test("a query that cannot run does not block the commit; a marker error does", (
   assert.equal(commit(bad).status, 1);
   assert.equal(git(bad, "log", "--oneline").split("\n").length, 1, "the commit went through");
 });
+
+test("--hook leaves a world-sourced drift unrewritten and does not block the commit", () => {
+  const root = repo({ registry: { "src-count": { ...REG["src-count"], source: "world" } } });
+  fs.writeFileSync(path.join(root, "src", "b.txt"), "b\n");
+  git(root, "add", "src/b.txt");
+  git(root, "commit", "-q", "-m", "more");
+  assert.match(fs.readFileSync(path.join(root, "AGENTS.md"), "utf8"), /<!-- live:src-count -->1</);
+});

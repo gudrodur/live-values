@@ -306,3 +306,44 @@ test("storeHealth: silent when kept or when nothing is a snapshot; one line per 
   assert.equal(stale.length, 1);
   assert.match(stale[0], /host\(9d>7d\) other\(never measured\)/);
 });
+
+// ---- "source": "world" ------------------------------------------------------
+const FOUR_WORLD = { run: "printf 4", kind: "file", format: "int", source: "world" };
+// A registered name no doc shows is UNUSED (exit 1), so each box registers what its doc uses.
+const worldBox = (doc) => sandbox({ doc, registry: { ...(doc.includes("live:three") ? { three: THREE } : {}), four: FOUR_WORLD } });
+
+test("world drift prints a refresh line and exits 0; repo drift still exits 1", () => {
+  const src = `A ${M("four", "9")} here.\n`;
+  const root = worldBox(src);
+  const r = cli(root, "--check");
+  assert.equal(r.status, 0, r.stdout + r.stderr);
+  assert.match(r.stdout, /refresh four: doc "9", world "4" \(run --refresh-world\)/);
+  assert.equal(doc(root), src, "--check wrote");
+  const both = worldBox(`A ${M("four", "9")} and ${M("three", "2")}.\n`);
+  const b = cli(both, "--check");
+  assert.equal(b.status, 1);
+  assert.match(b.stdout, /refresh four/);
+  assert.match(b.stdout, /DRIFT .*three/);
+});
+
+test("--refresh-world rewrites only world-sourced spans and exits 0", () => {
+  const root = worldBox(`A ${M("four", "9")} and ${M("three", "2")}.\n`);
+  const r = cli(root, "--refresh-world");
+  assert.equal(r.status, 1, "the repo drift left behind still fails the verdict");
+  assert.equal(doc(root), `A ${M("four", "4")} and ${M("three", "2")}.\n`);
+  const only = worldBox(`A ${M("four", "9")}.\n`);
+  assert.equal(cli(only, "--refresh-world").status, 0);
+  assert.equal(doc(only), `A ${M("four", "4")}.\n`);
+  assert.equal(cli(only, "--check").status, 0);
+});
+
+test("--refresh-world is one mode, and source must be repo or world", () => {
+  const root = worldBox(`A ${M("four", "4")}.\n`);
+  assert.equal(cli(root, "--refresh-world", "--check").status, 2);
+  for (const source of ["moon", 1]) {
+    const bad = sandbox({ doc: `A ${M("four", "4")}.\n`, registry: { four: { ...FOUR_WORLD, source } } });
+    assert.equal(cli(bad, "--check").status, 2, String(source));
+  }
+  const ok = sandbox({ doc: `A ${M("three", "3")}.\n`, registry: { three: { ...THREE, source: "repo" } } });
+  assert.equal(cli(ok, "--check").status, 0);
+});
